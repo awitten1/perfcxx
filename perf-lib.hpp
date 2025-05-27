@@ -56,6 +56,19 @@ class PerfEventGroup {
         pe.exclude_hv = 1;
         pe.exclude_kernel = 0;
         unsigned long flags = 0;
+
+
+        /**
+        From https://man7.org/linux/man-pages/man2/perf_event_open.2.html
+
+        "Total time the event was enabled and running.  Normally
+         these values are the same.  Multiplexing happens if the
+         number of events is more than the number of available PMU
+         counter slots.  In that case the events run only part of
+         the time and the time_enabled and time running values can
+         be used to scale an estimated value for the count."
+         */
+        pe.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
         int cpu = -1; // any cpu
         pid_t pid = 0; // this process
         int group_fd = leader ? -1 : fd_;
@@ -108,7 +121,7 @@ public:
         std::unordered_map<std::string, uint64_t> result_set;
 
         // read returns an array of {value, event_id tuples}
-        std::vector<uint64_t> events(1 + 2 * NumEvents());
+        std::vector<uint64_t> events(3 + 2 * NumEvents());
         int ret = read(fd_, events.data(), events.size() * 8);
         if (ret == -1) {
             std::ostringstream oss;
@@ -123,8 +136,8 @@ public:
 
         uint64_t id = -1;
         uint64_t value = -1;
-        // skip first element, which holds nr, the number of events
-        for (size_t i = 1; i < events.size(); ++i) {
+        // skip first three elements, which holds nr events, time_enabled, time_running
+        for (size_t i = 3; i < events.size(); ++i) {
             if ((i & 1) == 0) {
                 id = events[i];
                 auto it = std::find_if(event_info_map_.begin(), event_info_map_.end(),
@@ -149,6 +162,13 @@ public:
         ret = ioctl(fd_,  PERF_EVENT_IOC_ENABLE);
         if (ret == -1) {
             throw std::runtime_error{"failed to enable events"};
+        }
+    }
+
+    void Disable() {
+        int ret = ioctl(fd_, PERF_EVENT_IOC_DISABLE);
+        if (ret == -1) {
+            std::cerr << "failed to disable event group" << std::endl;
         }
     }
 
