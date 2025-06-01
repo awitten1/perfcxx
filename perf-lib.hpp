@@ -1,10 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <linux/perf_event.h>
 #include <linux/hw_breakpoint.h>
+#include <ratio>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -18,7 +20,6 @@
 
 // https://man7.org/linux/man-pages/man2/perf_event_open.2.html
 class PerfEventGroup {
-    int fd_;
 
     struct EventInfo {
         uint64_t config;
@@ -52,7 +53,6 @@ class PerfEventGroup {
         // disable leader initially.  when leader starts, everyone starts.
         pe.disabled = leader ? 1 : 0;
         pe.sample_period = 0;
-        pe.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
         pe.exclude_hv = 1;
         pe.exclude_kernel = 0;
         unsigned long flags = 0;
@@ -68,14 +68,11 @@ class PerfEventGroup {
          the time and the time_enabled and time running values can
          be used to scale an estimated value for the count."
          */
-        pe.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
+        pe.read_format = PERF_FORMAT_ID | PERF_FORMAT_TOTAL_TIME_ENABLED | PERF_FORMAT_TOTAL_TIME_RUNNING;
         int cpu = -1; // any cpu
         pid_t pid = 0; // this process
-        int group_fd = leader ? -1 : fd_;
+        int group_fd = -1;
         int fd = syscall(SYS_perf_event_open, &pe, pid, cpu, group_fd, flags);
-        if (leader) {
-            fd_ = fd;
-        }
         if (fd == -1) {
             std::cerr << "failed opening perf event, reason = " << strerror(errno) << std::endl;
             return;
@@ -97,91 +94,66 @@ public:
         }
     }
 
-    int GetFd() {
-        return fd_;
-    }
-
     struct EventArg {
         uint64_t config;
         uint32_t type;
         std::string name;
     };
 
-    static PerfEventGroup BuildPerfEventGroup(std::vector<EventArg> args) {
-        auto& f = args.front();
-        PerfEventGroup ret(f.config, f.type, f.name);
-        for (int i = 1; i < args.size(); ++i) {
-            f = args[i];
-            ret.AddEvent(f.config, f.type, f.name);
-        }
-        return ret;
-    }
+    using u64 = uint64_t;
+    struct read_format {
+        u64 value;         /* The value of the event */
+        u64 time_enabled;  /* if PERF_FORMAT_TOTAL_TIME_ENABLED */
+        u64 time_running;  /* if PERF_FORMAT_TOTAL_TIME_RUNNING */
+        u64 id;            /* if PERF_FORMAT_ID */
+        //u64 lost;          /* if PERF_FORMAT_LOST */
+    };
+
+
+
 
     std::unordered_map<std::string, uint64_t> ReadEvents() {
         std::unordered_map<std::string, uint64_t> result_set;
 
-        // read returns an array of {value, event_id tuples}
-        std::vector<uint64_t> events(3 + 2 * NumEvents());
-        int ret = read(fd_, events.data(), events.size() * 8);
-        if (ret == -1) {
-            std::ostringstream oss;
-            oss << "failed to read events reason = " << strerror(errno);
-            std::cerr << oss.str() << std::endl;
-            return {};
-        }
-        if (events[0] != NumEvents()) {
-            std::cerr << "number of events recieved does not equal expected number" << std::endl;
-            return {};
+        for (auto& event : event_info_map_) {
+            read_format buf;
+            long bytes_read = read(event.fd, (void*)&buf, sizeof(buf));
+            if (bytes_read != sizeof(buf)) {
+                std::cerr << "didn't read all the bytes" << std::endl;
+            }
+            double scale_factor = (double)buf.time_enabled / buf.time_running;
+            result_set[event.event_name] = (scale_factor)*buf.value;
         }
 
-        uint64_t id = -1;
-        uint64_t value = -1;
-        // skip first three elements, which holds nr events, time_enabled, time_running
-        for (size_t i = 3; i < events.size(); ++i) {
-            if ((i & 1) == 0) {
-                id = events[i];
-                auto it = std::find_if(event_info_map_.begin(), event_info_map_.end(),
-                    [id](auto v) { return v.id == id; });
-                if (it == event_info_map_.end()) {
-                    throw std::runtime_error{"id found in result set not registered. this should not happen"};
-                }
-                result_set[it->event_name] = value;
-            } else {
-                value = events[i];
-            }
-        }
+        std::chrono::duration<double, std::milli> ms = disable_time_ - enable_time_;
+        result_set["wall_clock_ms"] = ms.count();
+
         return result_set;
     }
 
+
+    std::chrono::time_point<std::chrono::steady_clock> enable_time_;
+    std::chrono::time_point<std::chrono::steady_clock> disable_time_;
+
     void Enable() {
-        // is PERF_IOC_FLAG_GROUP needed when operating on group leader?
-        int ret = ioctl(fd_,  PERF_EVENT_IOC_RESET);
-        if (ret == -1) {
-            throw std::runtime_error{"failed to reset counters"};
+        for (auto& event : event_info_map_) {
+            ioctl(event.fd, PERF_EVENT_IOC_RESET);
         }
-        ret = ioctl(fd_,  PERF_EVENT_IOC_ENABLE);
-        if (ret == -1) {
-            throw std::runtime_error{"failed to enable events"};
+        for (auto& event : event_info_map_) {
+            ioctl(event.fd, PERF_EVENT_IOC_ENABLE);
         }
+        enable_time_ = std::chrono::steady_clock::now();
     }
 
     void Disable() {
-        int ret = ioctl(fd_, PERF_EVENT_IOC_DISABLE);
-        if (ret == -1) {
-            std::cerr << "failed to disable event group" << std::endl;
+        for (auto& event : event_info_map_) {
+            ioctl(event.fd, PERF_EVENT_IOC_DISABLE);
         }
+        disable_time_ = std::chrono::steady_clock::now();
     }
 
     void AddEvent(uint64_t config, uint32_t type, const std::string& name) {
         AddEvent(false, config, type, name);
     }
 
-    void Reset() {
-        int ret = ioctl(fd_, PERF_IOC_FLAG_GROUP | PERF_EVENT_IOC_RESET);
-        if (ret == -1) {
-            std::ostringstream oss;
-            oss << "failed to reset counters";
-            std::cerr << oss.str() << std::endl;
-        }
-    }
 };
