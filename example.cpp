@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <linux/perf_event.h>
+#include <memory>
 #include <numeric>
 #include <string>
 #include <unordered_map>
@@ -84,85 +86,113 @@ uint64_t __attribute__ ((noinline)) random_sum(const uint64_t* arr, size_t sz) {
 
 int main(int argc, char** argv) {
 
-    int vector_size = std::stoi(argv[1]);
+    std::ofstream output_file("out.csv", std::ios::trunc | std::ios::out);
 
-    std::cout << "vector size = " << vector_size / 1e6 << " million" << std::endl;
+    bool written_header = false;
 
-    std::cout << "sequential access pattern" << std::endl;
-    {
-        std::vector<uint64_t> vec(vector_size);
-        std::iota(vec.begin(), vec.end(), 0);
-        PerfEventGroup events(PERF_COUNT_HW_CPU_CYCLES, PERF_TYPE_HARDWARE, "cycles");
-        events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
-        events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-misses");
+    for (int i = 0; i < 24; ++i) {
+        int vector_size = 1 << i;
 
-        events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
-                (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-prefetch");
+        std::cout << "sequential access pattern" << std::endl;
+        {
+            std::vector<uint64_t> vec(vector_size);
+            std::iota(vec.begin(), vec.end(), 0);
+            PerfEventGroup events(PERF_COUNT_HW_CPU_CYCLES, PERF_TYPE_HARDWARE, "cycles");
+            events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
+            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-misses");
 
-        events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-accesses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-prefetch");
 
-        events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc-cache-misses");
-        events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc-cache-accesses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-accesses");
+
+            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc-cache-misses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc-cache-accesses");
 
 
 
-        events.Enable();
+            events.Enable();
 
-        uint64_t res = sequential_sum(vec.data(), vec.size());
+            uint64_t res = sequential_sum(vec.data(), vec.size());
 
-        events.Disable();
-        auto results = events.ReadEvents();
-        std::cout << res << std::endl;
+            events.Disable();
+            auto results = events.ReadEvents();
+            std::cout << res << std::endl;
 
-        for (const auto [key, value] : results) {
-            std::cout << key << ", " << value << std::endl;
+            if (!written_header) {
+                output_file << "vector_size,access_pattern,";
+                for (auto it = results.begin(); it != results.end(); ++it) {
+                    output_file << it->first;
+                    if (std::next(it) != results.end()){
+                        output_file << ",";
+                    }
+                }
+                output_file << '\n';
+                written_header = true;
+            }
+            output_file << vector_size << "," << "sequential,";
+            for (auto it = results.begin(); it != results.end(); ++it) {
+                output_file << it->second;
+                if (std::next(it) != results.end()){
+                    output_file << ",";
+                }
+            }
+            output_file << '\n';
+            //std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d-cache-accesses") - results.at("l1d-cache-misses")) / results.at("l1d-cache-accesses") << std::endl;
+
         }
-        std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d-cache-accesses") - results.at("l1d-cache-misses")) / results.at("l1d-cache-accesses") << std::endl;
-
-    }
 
 
-    std::cout << "random access pattern" << std::endl;
-    {
-        std::vector<uint64_t> vec(vector_size);
-        std::iota(vec.begin(), vec.end(), 0);
-        uint32_t seed = 12345;
+        std::cout << "random access pattern" << std::endl;
+        {
+            //std::vector<uint64_t> vec(vector_size);
+            std::unique_ptr<uint64_t[]> arr(new uint64_t[vector_size]);
+            std::iota(arr.get(), arr.get() + vector_size, 0);
+            uint32_t seed = 12345;
 
-        PerfEventGroup events(PERF_COUNT_HW_CPU_CYCLES, PERF_TYPE_HARDWARE, "cycles");
-        events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
-        events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-misses");
+            PerfEventGroup events(PERF_COUNT_HW_CPU_CYCLES, PERF_TYPE_HARDWARE, "cycles");
+            events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
+            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-misses");
 
-        events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-accesses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-accesses");
 
-        events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
-                (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-prefetch");
+            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-prefetch");
 
 
-        events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc-cache-misses");
-        events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc-cache-accesses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc-cache-misses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc-cache-accesses");
 
-        events.Enable();
+            events.Enable();
 
-        uint64_t res = random_sum(vec.data(), vec.size());
+            uint64_t res = random_sum(arr.get(), vector_size);
 
-        events.Disable();
-        auto results = events.ReadEvents();
-        std::cout << res << std::endl;
+            events.Disable();
+            auto results = events.ReadEvents();
+            std::cout << res << std::endl;
 
-        for (const auto [key, value] : results) {
-            std::cout << key << ", " << value << std::endl;
+            output_file << vector_size << "," << "random,";
+
+            for (auto it = results.begin(); it != results.end(); ++it) {
+                output_file << it->second;
+                if (std::next(it) != results.end()){
+                    output_file << ",";
+                }
+            }
+            output_file << '\n';
+            //std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d-cache-accesses") - results.at("l1d-cache-misses")) / results.at("l1d-cache-accesses") << std::endl;
         }
-        std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d-cache-accesses") - results.at("l1d-cache-misses")) / results.at("l1d-cache-accesses") << std::endl;
+
     }
 
 

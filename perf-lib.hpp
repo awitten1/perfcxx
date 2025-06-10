@@ -13,7 +13,7 @@
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <string>
 #include <thread>
@@ -112,8 +112,8 @@ public:
 
 
 
-    std::unordered_map<std::string, uint64_t> ReadEvents() {
-        std::unordered_map<std::string, uint64_t> result_set;
+    std::map<std::string, uint64_t> ReadEvents() {
+        std::map<std::string, uint64_t> result_set;
 
         for (auto& event : event_info_map_) {
             read_format buf;
