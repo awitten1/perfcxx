@@ -9,10 +9,9 @@ def query_data():
     conn = duckdb.connect()
     return conn.execute(f"""
         select
-            l1d_cache_accesses, vector_size
+            access_pattern, l1d_cache_accesses, vector_size
         from '{csv_file}'
-        where access_pattern = 'random'
-        order by vector_size asc
+        order by access_pattern, vector_size asc
     """
     ).df()
 
@@ -23,8 +22,13 @@ def generate_plot(df):
         df,
         x="vector_size",
         y="l1d_cache_accesses",
-        title="L1D Cache Accesses vs Vector Size",
-        labels={"vector_size": "Vector Size", "l1d_cache_accesses": "L1D Cache Accesses"},
+        color="access_pattern",            # <-- key line: split lines by pattern
+        title="L1D Cache Misses by Access Pattern",
+        labels={
+            "vector_size": "Vector Size",
+            "l1d_cache_misses": "L1D Cache Misses",
+            "access_pattern": "Access Pattern"
+        },
         markers=True
     )
 

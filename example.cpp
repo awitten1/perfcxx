@@ -8,10 +8,11 @@
 #include <linux/perf_event.h>
 #include <memory>
 #include <numeric>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
+#include "amd_1ah_44h.h"
 // 00000000000032f0 <_Z14sequential_sumPKmm>:
 //     32f0:	f3 0f 1e fa          	endbr64
 //     32f4:	48 85 f6             	test   %rsi,%rsi
@@ -82,15 +83,20 @@ uint64_t __attribute__ ((noinline)) random_sum(const uint64_t* arr, size_t sz) {
 }
 
 
-
-
 int main(int argc, char** argv) {
 
     std::ofstream output_file("out.csv", std::ios::trunc | std::ios::out);
 
+    bool is_1ah = amd::family_1ah::model_44ah::check_processor_model();
+
+    if (!is_1ah) {
+        std::cerr << "unsupported cpu model" << std::endl;
+        return EXIT_FAILURE;
+    }
+
     bool written_header = false;
 
-    for (int i = 0; i < 30; ++i) {
+    for (int i = 0; i < 24; ++i) {
         int vector_size = 1 << i;
 
         std::cout << "sequential access pattern" << std::endl;
@@ -98,23 +104,23 @@ int main(int argc, char** argv) {
             std::vector<uint64_t> vec(vector_size);
             std::iota(vec.begin(), vec.end(), 0);
             PerfEventGroup events(PERF_COUNT_HW_CPU_CYCLES, PERF_TYPE_HARDWARE, "cycles");
-            events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
-            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_misses");
+            // events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+            //         (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+            //         (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_misses");
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                    (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_prefetch");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+            //         (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
+            //         (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_prefetch");
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_accesses");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+            //         (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+            //         (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_accesses");
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc_cache_misses");
-            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc_cache_accesses");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc_cache_misses");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc_cache_accesses");
 
-
+            amd::family_1ah::model_44ah::add_amd_specific_events(&events);
 
             events.Enable();
 
@@ -137,7 +143,8 @@ int main(int argc, char** argv) {
             }
             output_file << vector_size << "," << "sequential,";
             for (auto it = results.begin(); it != results.end(); ++it) {
-                output_file << it->second;
+                if (it->second.has_value())
+                    output_file << *it->second;
                 if (std::next(it) != results.end()){
                     output_file << ",";
                 }
@@ -156,22 +163,24 @@ int main(int argc, char** argv) {
             uint32_t seed = 12345;
 
             PerfEventGroup events(PERF_COUNT_HW_CPU_CYCLES, PERF_TYPE_HARDWARE, "cycles");
-            events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
-            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_misses");
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_accesses");
+            //events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+            //         (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+            //         (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_misses");
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
-                    (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_prefetch");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+            //         (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+            //         (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_accesses");
+
+            // events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
+            //         (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
+            //         (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_prefetch");
 
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc_cache_misses");
-            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc_cache_accesses");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc_cache_misses");
+            // events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc_cache_accesses");
+            amd::family_1ah::model_44ah::add_amd_specific_events(&events);
 
             events.Enable();
 
@@ -184,7 +193,8 @@ int main(int argc, char** argv) {
             output_file << vector_size << "," << "random,";
 
             for (auto it = results.begin(); it != results.end(); ++it) {
-                output_file << it->second;
+                if (it->second.has_value())
+                    output_file << *it->second;
                 if (std::next(it) != results.end()){
                     output_file << ",";
                 }

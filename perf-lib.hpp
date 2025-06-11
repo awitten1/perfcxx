@@ -6,6 +6,7 @@
 #include <iostream>
 #include <linux/perf_event.h>
 #include <linux/hw_breakpoint.h>
+#include <optional>
 #include <ratio>
 #include <sstream>
 #include <stdexcept>
@@ -51,7 +52,7 @@ class PerfEventGroup {
         pe.size = sizeof(pe);
 
         // disable leader initially.  when leader starts, everyone starts.
-        pe.disabled = leader ? 1 : 0;
+        pe.disabled = 1;
         pe.sample_period = 0;
         pe.exclude_hv = 1;
         pe.exclude_kernel = 0;
@@ -112,17 +113,23 @@ public:
 
 
 
-    std::map<std::string, uint64_t> ReadEvents() {
-        std::map<std::string, uint64_t> result_set;
+    std::map<std::string, std::optional<uint64_t>> ReadEvents() {
+        std::map<std::string, std::optional<uint64_t>> result_set;
 
         for (auto& event : event_info_map_) {
             read_format buf;
+            memset(&buf, 0, sizeof(buf));
             long bytes_read = read(event.fd, (void*)&buf, sizeof(buf));
             if (bytes_read != sizeof(buf)) {
                 std::cerr << "didn't read all the bytes" << std::endl;
             }
             double scale_factor = (double)buf.time_enabled / buf.time_running;
-            result_set[event.event_name] = (scale_factor)*buf.value;
+            if (buf.time_running == 0) {
+                result_set[event.event_name] = std::nullopt;
+            } else {
+                std::cout << scale_factor << std::endl;
+                result_set[event.event_name] = (scale_factor)*buf.value;
+            }
         }
 
         std::chrono::duration<double, std::milli> ms = disable_time_ - enable_time_;
