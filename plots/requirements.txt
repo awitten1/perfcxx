@@ -1,0 +1,5 @@
+duckdb==1.3
+plotly
+kaleido
+numpy
+pandas

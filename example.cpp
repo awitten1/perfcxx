@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
 
     bool written_header = false;
 
-    for (int i = 0; i < 24; ++i) {
+    for (int i = 0; i < 30; ++i) {
         int vector_size = 1 << i;
 
         std::cout << "sequential access pattern" << std::endl;
@@ -101,18 +101,18 @@ int main(int argc, char** argv) {
             events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
             events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
                     (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-misses");
+                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_misses");
 
             events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
                     (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-prefetch");
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_prefetch");
 
             events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
                     (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-accesses");
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_accesses");
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc-cache-misses");
-            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc-cache-accesses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc_cache_misses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc_cache_accesses");
 
 
 
@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
                 }
             }
             output_file << '\n';
-            //std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d-cache-accesses") - results.at("l1d-cache-misses")) / results.at("l1d-cache-accesses") << std::endl;
+            //std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d_cache_accesses") - results.at("l1d_cache_misses")) / results.at("l1d_cache_accesses") << std::endl;
 
         }
 
@@ -159,19 +159,19 @@ int main(int argc, char** argv) {
             events.AddEvent(PERF_COUNT_HW_INSTRUCTIONS, PERF_TYPE_HARDWARE, "ins");
             events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
                     (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-misses");
+                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_misses");
 
             events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
                     (PERF_COUNT_HW_CACHE_OP_READ << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-accesses");
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_accesses");
 
             events.AddEvent(PERF_COUNT_HW_CACHE_L1D |
                     (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8) |
-                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d-cache-prefetch");
+                    (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16), PERF_TYPE_HW_CACHE, "l1d_cache_prefetch");
 
 
-            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc-cache-misses");
-            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc-cache-accesses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_MISSES, PERF_TYPE_HARDWARE, "llc_cache_misses");
+            events.AddEvent(PERF_COUNT_HW_CACHE_REFERENCES, PERF_TYPE_HARDWARE, "llc_cache_accesses");
 
             events.Enable();
 
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
                 }
             }
             output_file << '\n';
-            //std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d-cache-accesses") - results.at("l1d-cache-misses")) / results.at("l1d-cache-accesses") << std::endl;
+            //std::cout << "l1d-cache hit rate = " << (float)(results.at("l1d_cache_accesses") - results.at("l1d_cache_misses")) / results.at("l1d_cache_accesses") << std::endl;
         }
 
     }
