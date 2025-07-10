@@ -145,9 +145,11 @@ public:
     std::chrono::time_point<std::chrono::steady_clock> enable_time_;
     std::chrono::time_point<std::chrono::steady_clock> disable_time_;
 
-    void Enable() {
-        for (auto& event : event_info_map_) {
-            ioctl(event.fd, PERF_EVENT_IOC_RESET);
+    void Enable(bool reset = false) {
+        if (reset) {
+            for (auto& event : event_info_map_) {
+                ioctl(event.fd, PERF_EVENT_IOC_RESET);
+            }
         }
         for (auto& event : event_info_map_) {
             ioctl(event.fd, PERF_EVENT_IOC_ENABLE);
