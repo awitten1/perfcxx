@@ -19,6 +19,7 @@
 #include <string>
 #include <thread>
 
+
 // https://man7.org/linux/man-pages/man2/perf_event_open.2.html
 class PerfEventGroup {
 
@@ -88,6 +89,8 @@ public:
     explicit PerfEventGroup(uint64_t config, uint32_t type, const std::string& name) {
         AddEvent(true, config, type, name);
     }
+
+    explicit PerfEventGroup() {}
 
     ~PerfEventGroup() {
         for (auto it = event_info_map_.rbegin(); it != event_info_map_.rend(); ++it) {
@@ -160,7 +163,10 @@ public:
     }
 
     void AddEvent(uint64_t config, uint32_t type, const std::string& name) {
-        AddEvent(false, config, type, name);
+        AddEvent(event_info_map_.empty(), config, type, name);
     }
 
 };
+
+PerfEventGroup& GetGlobalPerfEventGroup();
+

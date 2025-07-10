@@ -49,7 +49,16 @@ inline bool check_processor_model() {
 
 }
 
-static int x = rdmsrl_safe();
+
+// inline void cpuid() {
+//     int eax = 0, ebx = 0, ecx = 0, edx = 0, leaf = 0;
+//     asm volatile ("cpuid"
+//               : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
+//               : "a" (leaf));
+
+//     int model = (eax >> 4) & ((1 << 4) - 1);
+//     std::cout << "model = " << std::hex << model << std::endl;
+// }
 
 // These are taken from https://github.com/torvalds/linux/tree/403d1338a4a59cfebb4ded53fa35fbd5119f36b1/tools/perf/pmu-events/arch/x86/amdzen5
 // That link contains events and recommended "metrics" which are functions of the events.
@@ -57,7 +66,8 @@ inline void add_amd_specific_events(PerfEventGroup* event_group) {
     event_group->AddEvent(0xf760, PERF_TYPE_RAW, "amd_all_l2_cache_access");
     event_group->AddEvent(0xf160, PERF_TYPE_RAW, "amd_l2_cache_access_no_prefetch");
     event_group->AddEvent(0x0729, PERF_TYPE_RAW, "amd_memory_ops");
-    event_group->AddEvent(0x0729, PERF_TYPE_RAW, "amd_memory_ops");
+    event_group->AddEvent(0xe060, PERF_TYPE_RAW, "amd_all_data_l2_cache_access");
+    //event_group->AddEvent(0x0260, PERF_TYPE_RAW, "amd_l2_request_g1_l2_hw_pf");
 
 }
 
