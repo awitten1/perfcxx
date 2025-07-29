@@ -62,6 +62,7 @@ inline bool check_processor_model() {
 
 // These are taken from https://github.com/torvalds/linux/tree/403d1338a4a59cfebb4ded53fa35fbd5119f36b1/tools/perf/pmu-events/arch/x86/amdzen5
 // That link contains events and recommended "metrics" which are functions of the events.
+// The event codes are umask + eventCode.
 inline void add_amd_specific_events(PerfEventGroup* event_group) {
     event_group->AddEvent(0xf760, PERF_TYPE_RAW, "amd_all_l2_cache_access");
     event_group->AddEvent(0xf160, PERF_TYPE_RAW, "amd_l2_cache_access_no_prefetch");
