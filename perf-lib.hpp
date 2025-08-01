@@ -130,7 +130,6 @@ public:
             if (buf.time_running == 0) {
                 result_set[event.event_name] = std::nullopt;
             } else {
-                std::cout << scale_factor << std::endl;
                 result_set[event.event_name] = (scale_factor)*buf.value;
             }
         }
